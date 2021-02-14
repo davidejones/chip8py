@@ -13,11 +13,12 @@ class OpCode:
 
 
 class Instructions:
-    def __init__(self, pc, stack, registers, index_register):
+    def __init__(self, pc, stack, registers, index_register, memory):
         self.pc = pc
         self.stack = stack
         self.registers = registers
         self.index_register = index_register
+        self.memory = memory
         self.noop = OpCode(bytecode=0x0000, asm='NOP', description="No Operation", run=self.nop)
         self.data = {
             0x0000: {
@@ -80,7 +81,7 @@ class Instructions:
                     ret = ret[last]
         except KeyError:
             print(f'Unknown opcode 0x{opcode:x}')
-            ret = self.noop
+            #ret = self.noop
         return ret
 
     def __setitem__(self, key, value):
@@ -93,28 +94,29 @@ class Instructions:
         pass
 
     def ret(self, opcode):
-        self.pc = self.stack.pop()
+        val = self.stack.pop()
+        self.pc = val
 
     def jp(self, opcode):
-        self.pc = opcode & 0x0FFF
+        self.pc = (opcode & 0x0FFF) - 2 # sub 2 as we add 2 at end of all ops
 
     def call(self, opcode):
         # store in stack too?
         self.stack.append(self.pc)
-        self.pc = opcode & 0x0FFF
+        self.pc = (opcode & 0x0FFF) - 2 # sub 2 as we add 2 at end of all ops
 
     def se(self, opcode):
         # Skip next instruction if Vx = kk.
         # The interpreter compares register Vx to kk, and if they are equal, increments the program counter by 2.
-        n = opcode & 0x0F00
-        target = opcode & 0x00FF
-        if self.registers[n] == target:
+        vx = (opcode & 0x0F00) >> 8
+        vy = opcode & 0x00FF
+        if self.registers[vx] == vy:
             self.pc += 2
 
     def sne(self, opcode):
         # Skip next instruction if Vx != kk.
         # The interpreter compares register Vx to kk, and if they are not equal, increments the program counter by 2.
-        n = opcode & 0x0F00
+        n = (opcode & 0x0F00) >> 8
         target = opcode & 0x00FF
         if self.registers[n] != target:
             self.pc += 2
@@ -122,22 +124,22 @@ class Instructions:
     def se2(self, opcode):
         # Skip next instruction if Vx = Vy.
         # The interpreter compares register Vx to register Vy, and if they are equal, increments the program counter by 2.
-        vx = opcode & 0x0F00
-        vy = opcode & 0x00F0
+        vx = (opcode & 0x0F00) >> 8
+        vy = (opcode & 0x00F0) >> 4
 
         if self.registers[vx] == self.registers[vy]:
             self.pc += 2
 
     def ld(self, opcode):
         # Vx = NN
-        vx = opcode & 0x0F00
+        vx = (opcode & 0x0F00) >> 8
         nn = opcode & 0x00FF
         self.registers[vx] = nn
 
     def add(self, opcode):
         # Set Vx = Vx + kk.
         # Adds the value kk to the value of register Vx, then stores the result in Vx.
-        vx = opcode & 0x0F00
+        vx = (opcode & 0x0F00) >> 8
         kk = opcode & 0x00FF
         self.registers[vx] = self.registers[vx] + kk
 
@@ -146,8 +148,8 @@ class Instructions:
         # Set Vx = Vy.
         #
         # Stores the value of register Vy in register Vx.
-        vx = opcode & 0x0F00
-        vy = opcode & 0x00F0
+        vx = (opcode & 0x0F00) >> 8
+        vy = (opcode & 0x00F0) >> 4
         self.registers[vx] = self.registers[vy]
 
     def OR(self, opcode):
@@ -155,26 +157,26 @@ class Instructions:
         # Set Vx = Vx OR Vy.
         #
         # Performs a bitwise OR on the values of Vx and Vy, then stores the result in Vx. A bitwise OR compares the corrseponding bits from two values, and if either bit is 1, then the same bit in the result is also 1. Otherwise, it is 0.
-        vx = opcode & 0x0F00
-        vy = opcode & 0x00F0
+        vx = (opcode & 0x0F00) >> 8
+        vy = (opcode & 0x00F0) >> 4
         self.registers[vx] = self.registers[vx] | self.registers[vy]
 
     def AND(self, opcode):
-        vx = opcode & 0x0F00
-        vy = opcode & 0x00F0
+        vx = (opcode & 0x0F00) >> 8
+        vy = (opcode & 0x00F0) >> 4
         self.registers[vx] = self.registers[vx] & self.registers[vy]
 
     def XOR(self, opcode):
-        vx = opcode & 0x0F00
-        vy = opcode & 0x00F0
+        vx = (opcode & 0x0F00) >> 8
+        vy = (opcode & 0x00F0) >> 4
         self.registers[vx] = self.registers[vx] ^ self.registers[vy]
 
     def add2(self, opcode):
         # Vx += Vy
         # Set Vx = Vx + Vy, set VF = carry.
         # The values of Vx and Vy are added together. If the result is greater than 8 bits (i.e., > 255,) VF is set to 1, otherwise 0. Only the lowest 8 bits of the result are kept, and stored in Vx.
-        vx = opcode & 0x0F00
-        vy = opcode & 0x00F0
+        vx = (opcode & 0x0F00) >> 8
+        vy = (opcode & 0x00F0) >> 4
         self.registers[0xF] = 0
 
         self.registers[vx] += self.registers[vy]
@@ -184,8 +186,8 @@ class Instructions:
             self.registers[0xF] = 1
 
     def sub(self, opcode):
-        vx = opcode & 0x0F00
-        vy = opcode & 0x00F0
+        vx = (opcode & 0x0F00) >> 8
+        vy = (opcode & 0x00F0) >> 4
         self.registers[0xF] = 0
 
         # catch underflow
@@ -195,13 +197,13 @@ class Instructions:
         self.registers[vx] -= self.registers[vy]
 
     def shr(self, opcode):
-        vx = opcode & 0x0F00
+        vx = (opcode & 0x0F00) >> 8
         self.registers[0xF] = self.registers[vx] & 0x1
         self.registers[vx] >>= 1
 
     def subn(self, opcode):
-        vx = opcode & 0x0F00
-        vy = opcode & 0x00F0
+        vx = (opcode & 0x0F00) >> 8
+        vy = (opcode & 0x00F0) >> 4
         self.registers[0xF] = 0
 
         # catch underflow
@@ -211,13 +213,13 @@ class Instructions:
         self.registers[vx] = self.registers[vy] - self.registers[vx]
 
     def shl(self, opcode):
-        vx = opcode & 0x0F00
+        vx = (opcode & 0x0F00) >> 8
         self.registers[0xF] = self.registers[vx] & 0x80
         self.registers[vx] <<= 1
 
     def sne2(self, opcode):
-        vx = opcode & 0x0F00
-        vy = opcode & 0x00F0
+        vx = (opcode & 0x0F00) >> 8
+        vy = (opcode & 0x00F0) >> 4
 
         if self.registers[vx] != self.registers[vy]:
             self.pc += 2
@@ -228,10 +230,10 @@ class Instructions:
 
     def jp2(self, opcode):
         addr = opcode & 0x0FFF
-        self.pc = self.registers[0] + addr - 2
+        self.pc = self.registers[0] + addr - 2 # sub 2 as we add 2 at end of all ops
 
     def rnd(self, opcode):
-        vx = opcode & 0x0F00
+        vx = (opcode & 0x0F00) >> 8
         vy = opcode & 0x00FF
 
         rand = random.randint(0, 255)
@@ -246,7 +248,7 @@ class Instructions:
         # Ex9E - SKP Vx
         # Skip next instruction if key with the value of Vx is pressed.
         # Checks the keyboard, and if the key corresponding to the value of Vx is currently in the down position, PC is increased by 2.
-        vx = opcode & 0x0F00
+        vx = (opcode & 0x0F00) >> 8
         key = self.registers[vx]
         # TODO if key is down then inc pc
         # if self.keyboardKeys[key]:
@@ -255,14 +257,14 @@ class Instructions:
     def sknp(self, opcode):
         # Skip next instruction if key with the value of Vx is not pressed.
         # Checks the keyboard, and if the key corresponding to the value of Vx is currently in the up position, PC is increased by 2.
-        vx = opcode & 0x0F00
+        vx = (opcode & 0x0F00) >> 8
         key = self.registers[vx]
         # TODO if not pressed in pc by 2
 
     def ld4(self, opcode):
         # Set Vx = delay timer value.
         # The value of DT is placed into Vx.
-        vx = opcode & 0x0F00
+        vx = (opcode & 0x0F00) >> 8
         self.registers[vx] = 0 # read from a real timer?
 
     def ld5(self, opcode):
@@ -271,22 +273,48 @@ class Instructions:
         pass
 
     def ld6(self, opcode):
-        pass
+        # delay_timer(Vx)
+        vx = (opcode & 0x0F00) >> 8
+        val = self.registers[vx]
+        #self.delayTimer.setTimer(value)
 
     def ld7(self, opcode):
-        pass
+        # sound_timer(Vx)
+        vx = (opcode & 0x0F00) >> 8
+        value = self.registers[vx]
+        #self.soundTimer.setTimer(value)
 
     def add3(self, opcode):
-        pass
+        # Set I = I + Vx.
+        # The values of I and Vx are added, and the results are stored in I.
+        vx = (opcode & 0x0F00) >> 8
+        self.index_register += self.registers[vx]
 
     def ld8(self, opcode):
-        pass
+        # Set I = location of sprite for digit Vx.
+        # The value of I is set to the location for the hexadecimal sprite corresponding to the value of Vx. See section 2.4, Display, for more information on the Chip-8 hexadecimal font.
+        vx = (opcode & 0x0F00) >> 8
+        val = self.registers[vx]
+        self.index_register = val * 5
 
     def ld9(self, opcode):
-        pass
+        # Store BCD representation of Vx in memory locations I, I+1, and I+2.
+        # The interpreter takes the decimal value of Vx, and places the hundreds digit in memory at location in I, the tens digit at location I+1, and the ones digit at location I+2.
+        vx = (opcode & 0x0F00) >> 8
+        value = str(self.registers[vx])
+
+        fillNum = 3 - len(value)
+        value = '0' * fillNum + value
+
+        for i in range(len(value)):
+            self.memory[self.index_register + i] = int(value[i])
 
     def ld10(self, opcode):
-        pass
+        vx = (opcode & 0x0F00) >> 8
+        for i in range(0, vx + 1):
+            self.memory[self.index_register + i] = self.registers[i]
 
     def ld11(self, opcode):
-        pass
+        vx = (opcode & 0x0F00) >> 8
+        for i in range(0, vx + 1):
+            self.registers[i] = self.memory[self.index_register + i]
