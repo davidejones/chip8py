@@ -143,7 +143,7 @@ def main():
         #imgui.image(tex, WIDTH, HEIGHT)
         #imgui.end()
 
-        debug.update(c8.opcode)
+        debug.update(c8.opcode, c8.registers, c8.index_register)
 
     def draw(dt):
         gl.glClearColor(0.114, 0.114, 0.114, 1.0)  # 1d1d1d
