@@ -3,6 +3,7 @@ from __future__ import absolute_import
 
 import pyglet
 from pyglet import gl
+from pyglet import shapes
 
 import imgui
 # Note that we could explicitly choose to use PygletFixedPipelineRenderer
@@ -12,7 +13,6 @@ from imgui.integrations.pyglet import create_renderer
 
 from buffers import FrameBuffer
 from chip8 import Chip8
-from debug import DebugScreen
 import ctypes
 
 WIDTH = 800
@@ -21,147 +21,111 @@ SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
 FBO = None
 texture = None
+FPS = 300
+scale = 10
 
 
 def main():
-    window = pyglet.window.Window(width=800, height=600, resizable=False)
+    window = pyglet.window.Window(width=1000, height=32 * 20, resizable=False)
 
     imgui.create_context()
     impl = create_renderer(window)
 
-    debug = DebugScreen()
+    c8 = Chip8(scale)
+    c8.load_rom("Tic-Tac-Toe.ch8")
 
-    c8 = Chip8()
-    c8.load_rom("breakout.rom")
+    def debug_ui():
+        # Draw general information
+        imgui.begin("Debug", False, imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_MOVE)
+        imgui.set_window_size(330, 620)
+        imgui.set_window_position(660, 10)
+        # imgui.text("CPU:")
+        # imgui.same_line()
+        # imgui.text_colored("Eggs", 0.2, 1., 0.)
 
-    # Create the framebuffer (rendering target).
-    from ctypes import byref, sizeof, POINTER
-    #fbo = FrameBuffer()
-    #fbo.bind()
-    # buf = gl.GLuint(0)
-    # gl.glGenFramebuffers(1, byref(buf))
-    # gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, buf)
-    #
-    # # Create the texture (internal pixel data for the framebuffer).
-    # tex = gl.GLuint(0)
-    # gl.glGenTextures(1, byref(tex))
-    # gl.glBindTexture(gl.GL_TEXTURE_2D, tex)
-    # gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
-    # gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR)
-    # gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, WIDTH, HEIGHT, 0, gl.GL_RGBA, gl.GL_FLOAT, None)
-    #
-    # # Bind the texture to the framebuffer.
-    # gl.glFramebufferTexture2D(gl.GL_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, tex, 0)
-    #
-    # gl.glViewport(0, 0, WIDTH, HEIGHT)
-    #
-    # # DRAW BEGIN
-    # gl.glClearColor(0.114, 0.114, 0.114, 1.0)  # 1d1d1d
-    # gl.glMatrixMode(gl.GL_PROJECTION)
-    # gl.glLoadIdentity()
-    # gl.glOrtho(0, 100, 0, 100, -1, 1)
-    # gl.glMatrixMode(gl.GL_MODELVIEW)
-    # gl.glLoadIdentity()
-    # gl.glColor3f(1.0, 1.0, 1.0)
-    # label = pyglet.text.Label(
-    #     "Hello, World", font_name='Times New Roman', font_size=36,
-    #     x=WIDTH / 2, y=HEIGHT / 2, anchor_x='center', anchor_y='center')
-    # label.draw()
-    # # DRAW END
-    #
-    # # Something may have gone wrong during the process, depending on the
-    # # capabilities of the GPU.
-    # res = gl.glCheckFramebufferStatus(gl.GL_FRAMEBUFFER)
-    # if res != gl.GL_FRAMEBUFFER_COMPLETE:
-    #     raise RuntimeError('Framebuffer not completed')
+        imgui.text("Registers:")
+        if c8.registers:
+            imgui.columns(4, "Bar")
+            imgui.separator()
 
-    # create FBO object once
-    # FBO = gl.GLuint()
-    # gl.glGenFramebuffersEXT(1, ctypes.byref(FBO))
-    #
-    # # bind the frame buffer
-    # gl.glBindFramebufferEXT(gl.GL_FRAMEBUFFER_EXT, FBO)
-    #
-    # tex = gl.GLuint(0)
-    # gl.glGenTextures(1, byref(tex))
-    # gl.glBindTexture(gl.GL_TEXTURE_2D, tex)
-    # gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR)
-    # blank = (gl.GLubyte * (WIDTH * HEIGHT * 4))()
-    # gl.glTexImage2D(gl.GL_TEXTURE_2D, 0,
-    #              gl.GL_RGBA,
-    #              WIDTH, HEIGHT,
-    #              0,
-    #              gl.GL_RGBA, gl.GL_UNSIGNED_BYTE,
-    #              blank)
-    # texture = pyglet.image.Texture(WIDTH, HEIGHT, gl.GL_TEXTURE_2D, tex.value)
-    #
-    # # bind texture and depth buffer to FBO
-    # gl.glBindTexture(texture.target, texture.id)
-    # gl.glFramebufferTexture2DEXT(gl.GL_FRAMEBUFFER_EXT, gl.GL_COLOR_ATTACHMENT0_EXT, texture.target, texture.id, 0)
-    #
-    # # clear FBO and set some GL defaults
-    # gl.glEnable(gl.GL_BLEND)
-    # gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
-    # gl.glEnable(gl.GL_DEPTH_TEST)
-    # gl.glDepthFunc(gl.GL_LEQUAL)
-    # gl.glClearDepth(1.0)
-    # gl.glClearColor(0.5, 0.0, 0.5, 0.0)  # set clear color yourself!
-    # gl.glViewport(0, 0, texture.width, texture.height)
-    # gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
-    # #SetScreen(0, 0, texture.width, texture.height)
-    # gl.glMatrixMode(gl.GL_MODELVIEW)
-    # gl.glLoadIdentity()
-    # gl.glMatrixMode(gl.GL_PROJECTION)
-    # gl.glLoadIdentity()
-    # gl.glOrtho(0, 0, texture.width, texture.height, -1.0, 1.0)
-    # gl.glMatrixMode(gl.GL_MODELVIEW)
-    #
-    # # simple error checking
-    # status = gl.glCheckFramebufferStatusEXT(gl.GL_FRAMEBUFFER_EXT)
-    # assert status == gl.GL_FRAMEBUFFER_COMPLETE_EXT
+            for count, reg in enumerate(c8.registers):
+                imgui.text(f'r{count} = 0x{reg:x}')
+                imgui.next_column()
 
-    def update(dt):
+            imgui.columns(1)
+            imgui.separator()
+
+        imgui.text("Index Register:")
+        imgui.same_line()
+        if c8.index_register:
+            imgui.text_colored(f'0x{c8.index_register:x}', 0.2, 1., 0.)
+        else:
+            imgui.text_colored(f'Unknown', 0.2, 1., 0.)
+
+        imgui.text("Current Instruction:")
+        imgui.same_line()
+        if c8.opcode:
+            imgui.text_colored(c8.opcode.asm or 'Unknown', 0.2, 1., 0.)
+        else:
+            imgui.text_colored('Unknown', 0.2, 1., 0.)
+
+        imgui.separator()
+        imgui.text("Colors:")
+        on_color_changed, color1 = imgui.color_edit3("Color 1", *[x / 255.0 for x in c8.on_color])
+        off_color_changed, color2 = imgui.color_edit3("Color 2", *[x / 255.0 for x in c8.off_color])
+        if on_color_changed:
+            c8.on_color = (round(color1[0]*255), round(color1[1]*255), round(color1[2]*255))
+            c8.draw(0, 0, [])
+        if off_color_changed:
+            c8.off_color = (round(color2[0] * 255), round(color2[1] * 255), round(color2[2] * 255))
+            c8.draw(0, 0, [])
+
+        imgui.end()
+
+        imgui.begin("Execution", False, imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_MOVE)
+        imgui.set_window_size(640, 290)
+        imgui.set_window_position(10, 340)
+        imgui.columns(2, 'fileLlist')
+        imgui.separator()
+        imgui.text("bytecode")
+        imgui.next_column()
+        imgui.text("instruction")
+        imgui.separator()
+        imgui.set_column_offset(1, 80)
+
+        for x in range(3):
+            imgui.next_column()
+            imgui.text('0x0000')
+            imgui.next_column()
+            imgui.text('LD Vx byte')
+
+            imgui.next_column()
+            imgui.text('0xF00F')
+            imgui.next_column()
+            imgui.text('jp addr')
+
+        selected = [True, False]
+        imgui.next_column()
+        _, selected[0] = imgui.selectable("0xFFFF", selected[0], imgui.SELECTABLE_SPAN_ALL_COLUMNS)
+        imgui.next_column()
+        _, selected[1] = imgui.selectable("do byte", selected[1], imgui.SELECTABLE_SPAN_ALL_COLUMNS)
+        imgui.set_item_allow_overlap()
+
+        imgui.columns(1)
+        imgui.separator()
+        imgui.end()
+
+    def on_draw(dt):
+        # clear the window
+        window.clear()
         c8.cycle()
-        # Start Window
+        c8.render()
         imgui.new_frame()
-
-        # Draw Menubar
-        # if imgui.begin_main_menu_bar():
-        #     if imgui.begin_menu("File", True):
-        #         clicked_quit, selected_quit = imgui.menu_item(
-        #             "Quit", 'Cmd+Q', False, True
-        #         )
-        #         if clicked_quit:
-        #             exit(1)
-        #         imgui.end_menu()
-        #     imgui.end_main_menu_bar()
-
-        # Draw game window
-        #imgui.begin("Game", False, imgui.WINDOW_NO_RESIZE)
-        #imgui.set_window_size(64*7, 32*7)
-        #imgui.set_window_position(10, 30)
-        #imgui.image(tex, WIDTH, HEIGHT)
-        #imgui.end()
-
-        debug.update(c8.opcode, c8.registers, c8.index_register)
-
-    def draw(dt):
-        gl.glClearColor(0.114, 0.114, 0.114, 1.0)  # 1d1d1d
-        gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
-
-        gl.glBegin(gl.GL_LINES)
-        # create a line, x,y,z
-        gl.glVertex3f(100.0, 100.0, 0.25)
-        gl.glVertex3f(200.0, 300.0, -0.75)
-        gl.glEnd()
-
-        update(dt)
-        #window.clear()
-
+        debug_ui()
         imgui.render()
         impl.render(imgui.get_draw_data())
 
-    pyglet.clock.schedule_interval(draw, 1 / 120.)
+    pyglet.clock.schedule_interval(on_draw, 1.0/FPS)
     pyglet.app.run()
     impl.shutdown()
 

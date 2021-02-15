@@ -1,6 +1,9 @@
+import math
 import random
 from dataclasses import dataclass
 from typing import Callable
+import pyglet
+from pyglet import shapes
 
 
 @dataclass
@@ -13,8 +16,11 @@ class OpCode:
 
 
 class Chip8(object):
-    def __init__(self) -> None:
+    def __init__(self, scale) -> None:
         super().__init__()
+        self.width = 64
+        self.height = 32
+        self.scale = scale
         self.rom_pointer = 512
         self.memory = bytearray(4096)
         # 0x050-0x0A0 - Used for the built in 4x5 pixel font set (0-F) (80 bytes)
@@ -87,6 +93,23 @@ class Chip8(object):
                 0xF065: OpCode(bytecode=0xF065, asm="LD Vx, [I]", description="Read registers V0 through Vx from memory starting at location I. The interpreter reads values from memory starting at location I into registers V0 through Vx.", run=self.ld11)
             }
         }
+        self.grid = []
+        for i in range(32):
+            line = []
+            for j in range(64):
+                line.append(0)
+            self.grid.append(line)
+        self.emptyGrid = self.grid[:]
+        self.on_color = [255, 255, 255]
+        self.off_color = [0, 0, 0]
+        # creating a batch object
+        self.batch = pyglet.graphics.Batch()
+        self.shape_grid = []
+        for i in range(len(self.grid)):
+            shape_line = []
+            for j in range(len(self.grid[i])):
+                shape_line.append(shapes.Rectangle((j * self.scale) + 10, ((32 * 20) - (i * self.scale)) - 20, self.scale, self.scale, color=self.off_color, batch=self.batch))
+            self.shape_grid.append(shape_line)
 
     def get_instruction(self, opcode):
         ret = None
@@ -104,14 +127,15 @@ class Chip8(object):
                     ret = ret[last]
         except KeyError:
             print(f'Unknown opcode 0x{opcode:x}')
-            #ret = self.noop
         return ret
 
-    def nop(self, *args, **kwargs):
-        pass
-
     def cls(self, opcode):
-        pass
+        for i in range(len(self.grid)):
+            for j in range(len(self.grid[0])):
+                self.grid[i][j] = 0
+        for i in range(len(self.shape_grid)):
+            for j in range(len(self.shape_grid[i])):
+                self.shape_grid[i][j].color = self.off_color
 
     def ret(self, opcode):
         val = self.stack.pop()
@@ -261,8 +285,63 @@ class Chip8(object):
         self.registers[vx] = vy & rand
 
     def drw(self, opcode):
-        # TODO setup later
-        pass
+        # Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
+        # The interpreter reads n bytes from memory, starting at the address stored in I.
+        # These bytes are then displayed as sprites on screen at coordinates (Vx, Vy).
+        # Sprites are XORed onto the existing screen. If this causes any pixels to be erased, VF is set to 1, otherwise it is set to 0.
+        # If the sprite is positioned so part of it is outside the coordinates of the display, it wraps around to the opposite side of the screen.
+        # See instruction 8xy3 for more information on XOR, and section 2.4, Display, for more information on the Chip-8 screen and sprites.
+        vx = (opcode & 0x0F00) >> 8
+        vy = (opcode & 0x00F0) >> 4
+        n = opcode & 0x000F
+
+        addr = self.index_register
+        sprite = self.memory[addr:addr + n]
+
+        if self.draw(self.registers[vx], self.registers[vy], sprite):
+            self.registers[0xf] = 1
+        else:
+            self.registers[0xf] = 0
+
+    def draw(self, Vx, Vy, sprite):
+        collision = False
+
+        spriteBits = []
+        for i in sprite:
+            binary = bin(i)
+            line = list(binary[2:])
+            fillNum = 8 - len(line)
+            line = ['0'] * fillNum + line
+
+            spriteBits.append(line)
+
+        '''
+        for i in spriteBits:
+            print(i)
+        '''
+
+        for i in range(len(spriteBits)):
+            # line = ''
+            for j in range(8):
+                try:
+                    if self.grid[Vy + i][Vx + j] == 1 and int(spriteBits[i][j]) == 1:
+                        collision = True
+
+                    self.grid[Vy + i][Vx + j] = self.grid[Vy + i][Vx + j] ^ int(spriteBits[i][j])
+                    # line += str(int(spriteBits[i][j]))
+                except:
+                    continue
+
+            # print(line)
+
+        for i in range(len(self.shape_grid)):
+            for j in range(len(self.shape_grid[i])):
+                if self.grid[i][j] == 1:
+                    self.shape_grid[i][j].color = self.off_color
+                else:
+                    self.shape_grid[i][j].color = self.on_color
+
+        return collision
 
     def skp(self, opcode):
         # Ex9E - SKP Vx
@@ -349,9 +428,6 @@ class Chip8(object):
                 self.memory[ptr:ptr + 1] = [int.from_bytes(byte, "big", signed=False)]
                 ptr += 1
 
-    def draw(self):
-        pass
-
     def cycle(self):
         # Fetch opcode
         opcode = self.memory[self.pc] << 8 | self.memory[self.pc + 1]
@@ -363,4 +439,8 @@ class Chip8(object):
         #print(self.opcode)
         self.pc += 2
 
-        print(hex(opcode), self.pc)
+        #print(hex(opcode), self.pc)
+
+    def render(self):
+        self.batch.draw()
+
