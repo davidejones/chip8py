@@ -11,7 +11,6 @@ import imgui
 # version checking for us.
 from imgui.integrations.pyglet import create_renderer
 
-from buffers import FrameBuffer
 from chip8 import Chip8
 import ctypes
 
@@ -32,11 +31,11 @@ def main():
     impl = create_renderer(window)
 
     c8 = Chip8(scale)
-    c8.load_rom("Tic-Tac-Toe.ch8")
+    c8.load_rom("games\\breakout.rom")
 
     def debug_ui():
         # Draw general information
-        imgui.begin("Debug", False, imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_MOVE)
+        imgui.begin("Debug", False, imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_COLLAPSE)
         imgui.set_window_size(330, 620)
         imgui.set_window_position(660, 10)
         # imgui.text("CPU:")
@@ -45,11 +44,15 @@ def main():
 
         imgui.text("Registers:")
         if c8.registers:
-            imgui.columns(4, "Bar")
+            imgui.columns(8, "Bar")
+            #imgui.set_column_offset(1, 20)
             imgui.separator()
 
             for count, reg in enumerate(c8.registers):
-                imgui.text(f'r{count} = 0x{reg:x}')
+                #imgui.text(f'r{count} = 0x{reg:x}')
+                imgui.text(f'r{count}')
+                imgui.next_column()
+                imgui.text_colored(f'0x{reg:x}', 0.2, 1., 0.)
                 imgui.next_column()
 
             imgui.columns(1)
@@ -70,11 +73,18 @@ def main():
             imgui.text_colored('Unknown', 0.2, 1., 0.)
 
         imgui.separator()
-        imgui.text("Colors:")
+        imgui.text("Actions:")
+        imgui.button("RESET", 100, 30)
+        imgui.same_line()
+        imgui.button("PAUSE", 100, 30)
+        imgui.same_line()
+        imgui.button("RESUME", 100, 30)
+
+        imgui.separator()
         on_color_changed, color1 = imgui.color_edit3("Color 1", *[x / 255.0 for x in c8.on_color])
         off_color_changed, color2 = imgui.color_edit3("Color 2", *[x / 255.0 for x in c8.off_color])
         if on_color_changed:
-            c8.on_color = (round(color1[0]*255), round(color1[1]*255), round(color1[2]*255))
+            c8.on_color = (round(color1[0] * 255), round(color1[1] * 255), round(color1[2] * 255))
             c8.draw(0, 0, [])
         if off_color_changed:
             c8.off_color = (round(color2[0] * 255), round(color2[1] * 255), round(color2[2] * 255))
@@ -82,7 +92,7 @@ def main():
 
         imgui.end()
 
-        imgui.begin("Execution", False, imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_MOVE)
+        imgui.begin("Execution", False, imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_COLLAPSE)
         imgui.set_window_size(640, 290)
         imgui.set_window_position(10, 340)
         imgui.columns(2, 'fileLlist')
