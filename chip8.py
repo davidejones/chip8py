@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Callable
 import pyglet
 from pyglet import shapes
+from pyglet.window import key
 
 
 @dataclass
@@ -110,6 +111,37 @@ class Chip8(object):
             for j in range(len(self.grid[i])):
                 shape_line.append(shapes.Rectangle((j * self.scale) + 10, ((32 * 20) - (i * self.scale)) - 20, self.scale, self.scale, color=self.off_color, batch=self.batch))
             self.shape_grid.append(shape_line)
+        self.pc_key_map = {
+            key._1: 1,
+            key._2: 2,
+            key._3: 3,
+            key._4: 0xc,
+            key.Q: 4,
+            key.W: 5,
+            key.E: 6,
+            key.R: 0xd,
+            key.A: 7,
+            key.S: 8,
+            key.D: 9,
+            key.F: 0xe,
+            key.Z: 0xa,
+            key.X: 0,
+            key.C: 0xb,
+            key.V: 0xf
+        }
+        self.keyboard_keys = []
+        for i in range(0, 16):
+            self.keyboard_keys.append(False)
+        self.is_paused = False
+
+    def reset(self):
+        self.cls(None)
+        self.pc = 0x200  # Program counter starts at 0x200
+        self.opcode = 0  # Reset current opcode
+        self.index_register = bytearray(0)  # Reset index register
+        self.registers = list(map(lambda x: 0, self.registers))
+        self.stack = []
+        self.keyboard_keys = list(map(lambda x: False, self.keyboard_keys))
 
     def get_instruction(self, opcode):
         ret = None
@@ -128,6 +160,16 @@ class Chip8(object):
         except KeyError:
             print(f'Unknown opcode 0x{opcode:x}')
         return ret
+
+    def key_press(self, symbol):
+        if symbol in self.pc_key_map:
+            chip8_key = self.pc_key_map[symbol]
+            self.keyboard_keys[chip8_key] = True
+
+    def key_release(self, symbol):
+        if symbol in self.pc_key_map:
+            chip8_key = self.pc_key_map[symbol]
+            self.keyboard_keys[chip8_key] = False
 
     def cls(self, opcode):
         for i in range(len(self.grid)):
@@ -348,17 +390,17 @@ class Chip8(object):
         # Skip next instruction if key with the value of Vx is pressed.
         # Checks the keyboard, and if the key corresponding to the value of Vx is currently in the down position, PC is increased by 2.
         vx = (opcode & 0x0F00) >> 8
-        key = self.registers[vx]
-        # TODO if key is down then inc pc
-        # if self.keyboardKeys[key]:
-        #    self.pc += 2
+        chip8_key = self.registers[vx]
+        if self.keyboard_keys[chip8_key]:
+            self.pc += 2
 
     def sknp(self, opcode):
         # Skip next instruction if key with the value of Vx is not pressed.
         # Checks the keyboard, and if the key corresponding to the value of Vx is currently in the up position, PC is increased by 2.
         vx = (opcode & 0x0F00) >> 8
-        key = self.registers[vx]
-        # TODO if not pressed in pc by 2
+        chip8_key = self.registers[vx]
+        if not self.keyboard_keys[chip8_key]:
+            self.pc += 2
 
     def ld4(self, opcode):
         # Set Vx = delay timer value.
@@ -369,7 +411,17 @@ class Chip8(object):
     def ld5(self, opcode):
         # Wait for a key press, store the value of the key in Vx.
         # All execution stops until a key is pressed, then the value of that key is stored in Vx.
-        pass
+        vx = (opcode & 0x0F00) >> 8
+        active_key = None
+
+        while True:
+            if any(self.keyboard_keys):
+                active_keys = [index for index, val in enumerate(self.keyboard_keys) if val]
+                active_key = active_keys[0] if active_keys else None
+                print(active_key)
+                break
+
+        self.registers[vx] = active_key
 
     def ld6(self, opcode):
         # delay_timer(Vx)
@@ -429,17 +481,14 @@ class Chip8(object):
                 ptr += 1
 
     def cycle(self):
-        # Fetch opcode
-        opcode = self.memory[self.pc] << 8 | self.memory[self.pc + 1]
-        #print(hex(opcode), f'0x{opcode & 0xF000:x}')
+        if not self.is_paused:
+            # Fetch opcode
+            opcode = self.memory[self.pc] << 8 | self.memory[self.pc + 1]
 
-        # lookup instruction to run and execute
-        self.opcode = self.get_instruction(opcode)
-        self.opcode.run(opcode)
-        #print(self.opcode)
-        self.pc += 2
-
-        #print(hex(opcode), self.pc)
+            # lookup instruction to run and execute
+            self.opcode = self.get_instruction(opcode)
+            self.opcode.run(opcode)
+            self.pc += 2
 
     def render(self):
         self.batch.draw()
