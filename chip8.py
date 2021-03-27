@@ -137,6 +137,9 @@ class Chip8(object):
         self.is_paused = False
         self.sample_instructions = deque()
         self.sample_instructions_size = 12
+        self.delay_timer = 0
+        self.sound_timer = 0
+        self.audio = pyglet.resource.media('audio.wav', streaming=False)
 
     def reset(self):
         """
@@ -521,7 +524,7 @@ class Chip8(object):
         :param opcode:
         """
         vx = (opcode & 0x0F00) >> 8
-        self.registers[vx] = 0 # read from a real timer?
+        self.registers[vx] = self.delay_timer
 
     def ld5(self, opcode):
         """
@@ -546,10 +549,8 @@ class Chip8(object):
         DT is set equal to the value of Vx.
         :param opcode:
         """
-        # delay_timer(Vx)
         vx = (opcode & 0x0F00) >> 8
-        val = self.registers[vx]
-        #self.delayTimer.setTimer(value)
+        self.delay_timer = self.registers[vx]
 
     def ld7(self, opcode):
         """
@@ -557,10 +558,8 @@ class Chip8(object):
         ST is set equal to the value of Vx.
         :param opcode:
         """
-        # sound_timer(Vx)
         vx = (opcode & 0x0F00) >> 8
-        value = self.registers[vx]
-        #self.soundTimer.setTimer(value)
+        self.sound_timer = self.registers[vx]
 
     def add3(self, opcode):
         """
@@ -647,6 +646,13 @@ class Chip8(object):
             self.sample_instructions.append(self.opcode)
             self.opcode.run(opcode)
             self.pc += 2
+
+            if self.delay_timer > 0:
+                self.delay_timer -= 1
+            if self.sound_timer > 0:
+                self.sound_timer -= 1
+                if self.sound_timer == 0:
+                    self.audio.play()
 
     def render(self):
         """
